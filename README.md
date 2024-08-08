@@ -1,46 +1,25 @@
-# .NET Core Web API Projesinde Graylog Entegrasyonu
 
-Bu projede .NET Core Web API projemize Graylog entegrasyonunu nasıl yapılacağımızı inceledik.
+# GrayLogExample
 
-## Proje Yapısı
+Bu proje, .NET Core 8 ile Graylog entegrasyonunu için ufak bir örnek yapılmıştır.. Docker Compose kullanarak Graylog, MongoDB ve OpenSearch konteynerlerini çalıştırmaktadır. Ayrıca, Serilog kullanarak logların Graylog'a nasıl gönderileceği gösterilmektedir.
 
-Projemizin adı `GrayLogExample` ve .NET 8 kullanıyoruz. 
+## Gereksinimler
 
-## 1. Docker Compose Dosyası
+- Docker ve Docker Compose
+- .NET 8 SDK
 
-İlk olarak, `docker-compose.yml` dosyamızı inceleyeceğiz. Bu dosya, Graylog ve gerekli bileşenleri (MongoDB ve OpenSearch) için Docker container'larını tanımlar.
+## Kurulum
 
-```yaml
-version: '3'
-networks:
-  graynet:
-    driver: bridge
-volumes:
-  mongo_data:
-    driver: local
-  log_data:
-    driver: local
-  graylog_data:
-    driver: local
-services:
-  # ... (MongoDB, OpenSearch ve Graylog servisleri)
-```
+Projenin ana dizininde bulunan **docker-compose.yml** dosyası ile docker konteynerlerini başlatın:
+   ```sh
+   docker-compose up -d
+   ```
 
-### Önemli Noktalar:
-- `networks`: `graynet` adında bir bridge network tanımlanmış. Bu, containerlar arası iletişimi sağlar.
-- `volumes`: Verilerin kalıcı olması için üç ayrı volume tanımlanmış.
-- `mongo`: Graylog konfigürasyonlarını saklamak için MongoDB kullanılıyor.
-- `opensearch`: Logların kendisi OpenSearch'te saklanıyor.
-- `graylog`: Ana Graylog servisi.
+## Kullanım
 
-### Graylog Servis Konfigürasyonu:
-- Çeşitli environment variable'lar ile Graylog yapılandırılıyor.
-- Önemli portlar dışarıya açılıyor (9000, 1514, 12201, 1515).
-- Zaman dilimi "Europe/Istanbul" olarak ayarlanmış.
+### program.cs
 
-## 2. Program.cs Dosyası
-
-`Program.cs` dosyasında Serilog konfigürasyonu yapılıyor:
+Serilog yapılandırması `program.cs` dosyasında aşağıdaki gibi yapılmıştır:
 
 ```csharp
 builder.Host.UseSerilog((context, services, configuration) => configuration
@@ -50,11 +29,9 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     );
 ```
 
-Bu konfigürasyon, Serilog'un appsettings.json dosyasından ayarlarını okumasını ve servislerden loglama bağlamını zenginleştirmesini sağlar.
+### appsettings.json
 
-## 3. appsettings.json Dosyası
-
-`appsettings.json` dosyası, Serilog ve Graylog konfigürasyonlarını içerir:
+`appsettings.json` dosyası aşağıdaki gibi yapılandırılmıştır:
 
 ```json
 {
@@ -86,112 +63,92 @@ Bu konfigürasyon, Serilog'un appsettings.json dosyasından ayarlarını okumas�
 }
 ```
 
-### Önemli Noktalar:
-- Serilog, hem Console'a hem de Graylog'a log yazacak şekilde yapılandırılmış.
-- Graylog sink'i için localhost:1515 adresi ve UDP protokolü kullanılıyor.
-- Minimum log seviyesi "Information" olarak ayarlanmış.
+### docker-compose.yml
 
-## Neden Bu Yapılandırmalar?
+`docker-compose.yml` dosyası şu şekildedir:
 
-1. **Docker Compose**: Graylog ve bağımlılıklarını (MongoDB, OpenSearch) kolayca ayağa kaldırmak ve yönetmek için kullanılıyor.
-
-2. **Serilog**: .NET uygulamaları için popüler ve esnek bir loglama kütüphanesidir. Farklı "sink"lere (hedeflere) log göndermeyi kolaylaştırır.
-
-3. **Graylog**: Merkezi log yönetimi için güçlü bir platformdur. Logları toplar, analiz eder ve görselleştirir.
-
-## Alternatif Yaklaşımlar
-
-1. **ELK Stack**: Elasticsearch, Logstash ve Kibana kullanarak benzer bir log yönetim sistemi kurulabilir.
-
-2. **Azure Application Insights**: Microsoft Azure kullanan projeler için entegre bir APM ve loglama çözümü olabilir.
-
-3. **Farklı Log Seviyeleri**: Prodüksiyon ortamında "Information" yerine "Warning" veya "Error" seviyesi tercih edilebilir.
-
-4. **HTTPS Kullanımı**: Güvenlik için Graylog web arayüzüne HTTPS üzerinden erişim sağlanabilir.
-
-5. **Email Bildirimleri**: Graylog'un email gönderme özelliği (şu an yorum satırında) aktifleştirilebilir.
-
- 
-
-## Docker Compose'u Çalıştırma
-
-Docker Compose dosyamızı çalıştırmak için aşağıdaki adımları izleyin:
-
-1. Terminal veya komut istemcisini açın.
-2. `docker-compose.yml` dosyasının bulunduğu dizine gidin.
-3. Aşağıdaki komutu çalıştırın:
-
-```bash
-docker-compose up -d
+```yaml
+version: '3'
+networks:
+  graynet:
+    driver: bridge
+volumes:
+  mongo_data:
+    driver: local
+  log_data:
+    driver: local
+  graylog_data:
+    driver: local
+services:
+  mongo:
+    image: mongo:6.0.5-jammy
+    container_name: mongodb
+    volumes:
+      - "mongo_data:/data/db"
+    networks:
+      - graynet
+    restart: unless-stopped
+  opensearch:
+    image: opensearchproject/opensearch:2
+    container_name: opensearch
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "bootstrap.memory_lock=true"
+      - "discovery.type=single-node"
+      - "action.auto_create_index=false"
+      - "plugins.security.ssl.http.enabled=false"
+      - "plugins.security.disabled=true"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=SetPassw0rdL3ttersAndNumb3r5"
+    volumes:
+      - "log_data:/usr/share/opensearch/data"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 9200:9200/tcp
+    networks:
+      - graynet
+    restart: unless-stopped
+  graylog:
+    image: graylog/graylog:6.0
+    container_name: graylog
+    environment:
+      GRAYLOG_PASSWORD_SECRET: "somepasswordpepper"
+      GRAYLOG_ROOT_PASSWORD_SHA2: "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+      GRAYLOG_HTTP_BIND_ADDRESS: "0.0.0.0:9000"
+      GRAYLOG_HTTP_EXTERNAL_URI: "http://localhost:9000/"
+      GRAYLOG_ELASTICSEARCH_HOSTS: "http://opensearch:9200"
+      GRAYLOG_MONGODB_URI: "mongodb://mongodb:27017/graylog"
+      GRAYLOG_TIMEZONE: "Europe/Istanbul"
+      TZ: "Europe/Istanbul"
+    entrypoint: /usr/bin/tini -- wait-for-it opensearch:9200 -- /docker-entrypoint.sh
+    volumes:
+      - "${PWD}/config/graylog/graylog.conf:/usr/share/graylog/config/graylog.conf"
+      - "graylog_data:/usr/share/graylog/data"
+    networks:
+      - graynet
+    restart: always
+    depends_on:
+      opensearch:
+        condition: "service_started"
+      mongo:
+        condition: "service_started"
+    ports:
+      - 9000:9000/tcp
+      - 1514:1514/tcp
+      - 1514:1514/udp
+      - 12201:12201/tcp
+      - 12201:12201/udp
+      - 1515:1515/tcp
+      - 1515:1515/udp
 ```
 
-Bu komut, Docker Compose dosyasında tanımlanan tüm servisleri (MongoDB, OpenSearch ve Graylog) arka planda başlatacaktır.
+## Detaylı Bilgi
 
-4. Servislerin durumunu kontrol etmek için:
+Detaylı bilgi ve adım adım kurulum için lütfen [bu blog yazısına](https://medium.com/@onurkarasoy/net-core-ile-graylog-entegrasyonu-kurulum-ve-kullan%C4%B1m-457d6b24a36b) göz atın.
 
-```bash
-docker-compose ps
-```
 
-5. Servisleri durdurmak için:
-
-```bash
-docker-compose down
-```
-
-## Graylog Arayüzünden Input Oluşturma
-
-Graylog'a log gönderebilmek için öncelikle bir input oluşturmamız gerekiyor. Bunun için:
-
-1. Tarayıcınızda `http://localhost:9000` adresine gidin.
-2. Varsayılan kullanıcı adı `admin` ve şifre `admin` ile giriş yapın (ilk girişte şifrenizi değiştirmeniz istenecektir).
-3. Sol menüden "System" > "Inputs" seçeneğine tıklayın.
-4. "Select input" dropdown'ından "GELF UDP" seçeneğini seçin ve "Launch new input" butonuna tıklayın.
-5. Açılan formda:
-   - "Title" alanına anlamlı bir isim girin (örn. "GELF UDP Input").
-   - "Bind address" alanını `0.0.0.0` olarak bırakın.
-   - "Port" alanına `12201` yazın (docker-compose dosyasında tanımladığımız port).
-6. "Save" butonuna tıklayarak input'u oluşturun.
-
-## Stream Oluşturma
-
-Streamler, gelen logları belirli kriterlere göre filtrelemek ve yönlendirmek için kullanılır. Örnek bir stream oluşturmak için:
-
-1. Sol menüden "Streams" seçeneğine tıklayın.
-2. "Create stream" butonuna tıklayın.
-3. Stream için bir başlık ve açıklama girin (örn. "API Logs").
-4. "Save" butonuna tıklayın.
-5. Oluşturduğunuz stream'e tıklayın ve "Manage Rules" seçeneğini seçin.
-6. "Add stream rule" butonuna tıklayın.
-7. Kural için:
-   - "Field" olarak "source" seçin.
-   - "Type" olarak "contains" seçin.
-   - "Value" olarak "GraylogExampleDemo" yazın (appsettings.json'da belirttiğimiz uygulama adı).
-8. "Save" butonuna tıklayın.
-9. Stream sayfasına dönün ve "Start stream" butonuna tıklayarak stream'i aktifleştirin.
-
-## Log Gönderme ve Görüntüleme
-
-Artık .NET Core uygulamanızı çalıştırdığınızda, loglar otomatik olarak Graylog'a gönderilecektir. Logları görüntülemek için:
-
-1. Graylog arayüzünde "Search" sekmesine gidin.
-2. Oluşturduğunuz stream'i seçin.
-3. Arama kriterleri belirleyebilir veya tüm logları görüntüleyebilirsiniz.
-
-## Önemli Notlar ve İpuçları
-
-1. **Güvenlik**: Prodüksiyon ortamında Graylog arayüzüne erişimi kısıtladığınızdan ve güçlü şifreler kullandığınızdan emin olun.
-
-2. **Performans**: Çok fazla log gönderimi uygulamanızın performansını etkileyebilir. Log seviyelerini ve filtrelerinizi dikkatli ayarlayın.
-
-3. **Disk Alanı**: OpenSearch ve MongoDB'nin kullandığı disk alanını düzenli olarak kontrol edin. Gerekirse eski logları arşivleyin veya silin.
-
-4. **Alerting**: Graylog'un alerting özelliklerini kullanarak, belirli log patternleri için e-posta bildirimleri ayarlayabilirsiniz.
-
-5. **Dashboard'lar**: Sık kullandığınız arama sorgularını ve grafikleri içeren özel dashboard'lar oluşturarak log analizi sürecinizi hızlandırabilirsiniz.
-
-## Sonuç
-
-Bu adımları takip ederek, .NET Core Web API projenizi Graylog ile entegre etmiş ve merkezi bir log yönetim sistemi kurmuş oldunuz. Bu sistem, uygulamanızın davranışını izleme, hata ayıklama ve performans analizi yapma konularında size büyük kolaylık sağlayacaktır.
-
- 
